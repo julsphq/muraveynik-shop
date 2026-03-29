@@ -10,4 +10,6 @@ export const config = {
         : 4001,
     jwtSecret: process.env.JWT_SECRET || "dev-only-secret-change-me",
     clientOrigin: process.env.CLIENT_ORIGIN || "http://localhost:5173",
+    yookassaShopId: process.env.YOOKASSA_SHOP_ID || "",
+    yookassaSecretKey: process.env.YOOKASSA_SECRET_KEY || "",
 };

@@ -2,6 +2,9 @@ import "express-async-errors";
 import express from "express";
 import cors from "cors";
 import type { Server } from "node:http";
+import { mkdirSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
 import { config } from "./config.js";
 import authRoutes from "./routes/auth.js";
 import categoriesRoutes from "./routes/categories.js";
@@ -19,11 +22,17 @@ import questionsRoutes from "./routes/questions.js";
 import bannersRoutes from "./routes/banners.js";
 import blogRoutes from "./routes/blog.js";
 const app = express();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const uploadsDir = path.resolve(__dirname, "../uploads");
+mkdirSync(uploadsDir, { recursive: true });
+
 app.use(cors({
     origin: config.clientOrigin,
     credentials: true,
 }));
 app.use(express.json({ limit: "2mb" }));
+app.use("/uploads", express.static(uploadsDir));
 app.get("/api/health", (_req, res) => {
     res.json({ ok: true, service: "muraveynik-api" });
 });
