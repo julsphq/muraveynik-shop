@@ -1,19 +1,57 @@
 import { Router } from "express";
 import { z } from "zod";
 import { Prisma, OrderStatus } from "@prisma/client";
+import multer from "multer";
+import { mkdirSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { prisma } from "../db.js";
 import { authRequired, adminRequired, adminRoleOnly } from "../middleware/auth.js";
 import { notifyOrderStatusChange } from "../lib/notifications.js";
 const router = Router();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const uploadDir = path.resolve(__dirname, "../../uploads/products");
+mkdirSync(uploadDir, { recursive: true });
+const upload = multer({
+    storage: multer.diskStorage({
+        destination: (_req, _file, cb) => cb(null, uploadDir),
+        filename: (_req, file, cb) => {
+            const ext = path.extname(file.originalname || "").toLowerCase();
+            const safeExt = [".jpg", ".jpeg", ".png", ".webp", ".gif"].includes(ext)
+                ? ext
+                : ".jpg";
+            cb(null, `${Date.now()}-${Math.random().toString(36).slice(2, 10)}${safeExt}`);
+        },
+    }),
+    fileFilter: (_req, file, cb) => {
+        if (!file.mimetype.startsWith("image/")) {
+            cb(new Error("Можно загружать только изображения"));
+            return;
+        }
+        cb(null, true);
+    },
+    limits: {
+        fileSize: 10 * 1024 * 1024,
+    },
+});
 router.use(authRequired);
 router.use(adminRequired);
+router.post("/uploads/product-image", adminRoleOnly, upload.single("image"), async (req, res) => {
+    if (!req.file) {
+        res.status(400).json({ error: "Файл изображения не передан" });
+        return;
+    }
+    const imageUrl = `/uploads/products/${req.file.filename}`;
+    res.status(201).json({ imageUrl, filename: req.file.filename });
+});
 router.get("/stats", async (_req, res) => {
     const [users, products, orders, revenue] = await Promise.all([
         prisma.user.count(),
         prisma.product.count(),
         prisma.order.count(),
         prisma.order.aggregate({
-            where: { status: "PAID" },
+            where: { status: { notIn: ["NEW", "CANCELLED"] } },
             _sum: { total: true },
         }),
     ]);
@@ -68,7 +106,7 @@ const productSchema = z.object({
     description: z.string(),
     price: z.number().positive(),
     stock: z.number().int().min(0),
-    imageUrl: z.string().url().optional().or(z.literal("")),
+    imageUrl: z.union([z.string().url(), z.string().startsWith("/")]).optional().or(z.literal("")),
     categoryId: z.string(),
     brand: z.string().optional(),
     material: z.string().optional(),
