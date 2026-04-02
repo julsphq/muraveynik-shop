@@ -487,6 +487,37 @@ export const api = createApi({
                 { type: "Orders", id: arg.orderId },
             ],
         }),
+        createYookassaPayment: builder.mutation<{
+            demo?: boolean;
+            ok?: boolean;
+            message?: string;
+            paymentId?: string;
+            confirmationUrl?: string;
+            status?: string;
+        }, {
+            orderId: string;
+            guestEmail?: string;
+        }>({
+            query: (body) => ({
+                url: "/payments/yookassa/create",
+                method: "POST",
+                body,
+            }),
+            invalidatesTags: (_r, _e, arg) => [
+                "Orders",
+                { type: "Orders", id: arg.orderId },
+            ],
+        }),
+        getYookassaStatus: builder.query<{
+            orderId: string;
+            orderStatus: string;
+            paymentStatus: string | null;
+            total: string;
+            demo?: boolean;
+        }, string>({
+            query: (orderId) => `/payments/yookassa/status/${orderId}`,
+            providesTags: (_r, _e, orderId) => [{ type: "Orders", id: orderId }],
+        }),
         getAdminStats: builder.query<{
             users: number;
             products: number;
@@ -520,6 +551,29 @@ export const api = createApi({
             query: (id) => ({ url: `/admin/products/${id}`, method: "DELETE" }),
             invalidatesTags: ["Admin", "Products"],
         }),
+        patchAdminProduct: builder.mutation<Product, {
+            id: string;
+            imageUrl?: string;
+            stock?: number;
+            price?: number;
+        }>({
+            query: ({ id, ...body }) => ({
+                url: `/admin/products/${id}`,
+                method: "PATCH",
+                body,
+            }),
+            invalidatesTags: ["Admin", "Products"],
+        }),
+        uploadAdminProductImage: builder.mutation<{
+            imageUrl: string;
+            filename: string;
+        }, FormData>({
+            query: (body) => ({
+                url: "/admin/uploads/product-image",
+                method: "POST",
+                body,
+            }),
+        }),
         getAdminQuestions: builder.query<{
             items: (ProductQuestion & {
                 product: {
@@ -551,7 +605,7 @@ export const api = createApi({
         }),
     }),
 });
-export const { useGetCategoriesQuery, useGetCategoryTreeQuery, useGetProductsQuery, useGetProductQuery, useGetRelatedProductsQuery, useGetBannersQuery, useGetBlogPostsQuery, useGetBlogPostQuery, useGetQuestionsForProductQuery, usePostProductQuestionMutation, useGetProfileQuery, usePatchProfileMutation, useCreateSavedAddressMutation, useDeleteSavedAddressMutation, useGetReviewsForProductQuery, useCreateReviewMutation, useDeleteReviewMutation, useGetProductsByIdsQuery, useLazyGetProductsByIdsQuery, useGetDeliveryQuoteQuery, useRegisterMutation, useLoginMutation, useGetCartQuery, useAddToCartMutation, useUpdateCartItemMutation, useRemoveCartItemMutation, useGetFavoritesQuery, useAddFavoriteMutation, useRemoveFavoriteMutation, useCreateOrderMutation, useCreateGuestOrderMutation, useRepeatOrderToCartMutation, useGetOrdersQuery, useGetOrderQuery, useDemoPayMutation, useGetAdminStatsQuery, useGetAdminOrdersQuery, usePatchAdminOrderStatusMutation, useGetAdminProductsQuery, useDeleteAdminProductMutation, useGetAdminQuestionsQuery, usePatchAdminQuestionMutation, } = api;
+export const { useCreateYookassaPaymentMutation, useGetYookassaStatusQuery, useGetCategoriesQuery, useGetCategoryTreeQuery, useGetProductsQuery, useGetProductQuery, useGetRelatedProductsQuery, useGetBannersQuery, useGetBlogPostsQuery, useGetBlogPostQuery, useGetQuestionsForProductQuery, usePostProductQuestionMutation, useGetProfileQuery, usePatchProfileMutation, useCreateSavedAddressMutation, useDeleteSavedAddressMutation, useGetReviewsForProductQuery, useCreateReviewMutation, useDeleteReviewMutation, useGetProductsByIdsQuery, useLazyGetProductsByIdsQuery, useGetDeliveryQuoteQuery, useRegisterMutation, useLoginMutation, useGetCartQuery, useAddToCartMutation, useUpdateCartItemMutation, useRemoveCartItemMutation, useGetFavoritesQuery, useAddFavoriteMutation, useRemoveFavoriteMutation, useCreateOrderMutation, useCreateGuestOrderMutation, useRepeatOrderToCartMutation, useGetOrdersQuery, useGetOrderQuery, useDemoPayMutation, useGetAdminStatsQuery, useGetAdminOrdersQuery, usePatchAdminOrderStatusMutation, useGetAdminProductsQuery, useDeleteAdminProductMutation, usePatchAdminProductMutation, useUploadAdminProductImageMutation, useGetAdminQuestionsQuery, usePatchAdminQuestionMutation, } = api;
 export function getErrorMessage(err: FetchBaseQueryError | undefined): string {
     if (!err)
         return "Ошибка";
