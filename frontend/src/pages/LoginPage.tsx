@@ -3,28 +3,27 @@ import { Link, useNavigate } from "react-router-dom";
 import { useLoginMutation, getErrorMessage } from "../store/api";
 import { setCredentials } from "../store/authSlice";
 import { useAppDispatch } from "../hooks";
+import { useToast } from "../components/Toast";
 export function LoginPage() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [login, { isLoading }] = useLoginMutation();
     const dispatch = useAppDispatch();
     const navigate = useNavigate();
-    const [err, setErr] = useState<string | null>(null);
+    const toast = useToast();
     async function onSubmit(e: React.FormEvent) {
         e.preventDefault();
-        setErr(null);
         try {
             const r = await login({ email, password }).unwrap();
             dispatch(setCredentials({ token: r.token, user: r.user }));
             navigate("/catalog");
         }
         catch (e) {
-            setErr(getErrorMessage(e as never));
+            toast(getErrorMessage(e as never), false);
         }
     }
     return (<div style={{ maxWidth: "400px" }}>
       <h1>Вход</h1>
-      {err && <div className="alert">{err}</div>}
       <form onSubmit={onSubmit} className="stack">
         <div className="field">
           <label htmlFor="email">Email</label>

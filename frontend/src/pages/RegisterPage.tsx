@@ -3,29 +3,33 @@ import { Link, useNavigate } from "react-router-dom";
 import { useRegisterMutation, getErrorMessage } from "../store/api";
 import { setCredentials } from "../store/authSlice";
 import { useAppDispatch } from "../hooks";
+import { useToast } from "../components/Toast";
 export function RegisterPage() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [name, setName] = useState("");
+    const [consent, setConsent] = useState(false);
     const [register, { isLoading }] = useRegisterMutation();
     const dispatch = useAppDispatch();
     const navigate = useNavigate();
-    const [err, setErr] = useState<string | null>(null);
+    const toast = useToast();
     async function onSubmit(e: React.FormEvent) {
         e.preventDefault();
-        setErr(null);
+        if (!consent) {
+            toast("Подтвердите согласие на обработку персональных данных.", false);
+            return;
+        }
         try {
             const r = await register({ email, password, name: name || undefined }).unwrap();
             dispatch(setCredentials({ token: r.token, user: r.user }));
             navigate("/catalog");
         }
         catch (e) {
-            setErr(getErrorMessage(e as never));
+            toast(getErrorMessage(e as never), false);
         }
     }
     return (<div style={{ maxWidth: "400px" }}>
       <h1>Регистрация</h1>
-      {err && <div className="alert">{err}</div>}
       <form onSubmit={onSubmit} className="stack">
         <div className="field">
           <label htmlFor="name">Имя (необязательно)</label>
@@ -39,6 +43,16 @@ export function RegisterPage() {
           <label htmlFor="password">Пароль (мин. 6 символов)</label>
           <input id="password" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6}/>
         </div>
+        <label className="consent-check">
+          <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} required/>
+          <span>
+            Я соглашаюсь с{" "}
+            <Link to="/privacy" target="_blank" rel="noreferrer">
+              политикой конфиденциальности
+            </Link>{" "}
+            и обработкой персональных данных.
+          </span>
+        </label>
         <button type="submit" className="btn btn--primary" disabled={isLoading}>
           {isLoading ? "Создание…" : "Создать аккаунт"}
         </button>
