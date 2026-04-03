@@ -1,0 +1,13 @@
+{
+  "name": "Муравейник — строительные материалы",
+  "short_name": "Муравейник",
+  "description": "ИП «Муравейник»: стройматериалы, инструмент, ЛКМ, напольные покрытия. Доставка по городу.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f8f6",
+  "theme_color": "#3d9b45",
+  "icons": [
+    { "src": "/android-chrome-192x192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/android-chrome-512x512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

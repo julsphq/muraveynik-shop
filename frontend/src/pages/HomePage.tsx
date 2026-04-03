@@ -1,6 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useGetProductsQuery, useGetCategoryTreeQuery, useGetBannersQuery, } from "../store/api";
 import { useState } from "react";
+import { getProductImageUrl } from "../productImage";
 export function HomePage() {
     const navigate = useNavigate();
     const [q, setQ] = useState("");
@@ -31,7 +32,7 @@ export function HomePage() {
           <h1>Стройка и ремонт — с доставкой по городу</h1>
           <p className="hero-home__lead">
             Розничная торговля материалами, инструментом, ЛКМ и напольными
-            покрытиями. Актуальные остатки, онлайн-оплата (ЮKassa) и обмен с 1С.
+            покрытиями. Актуальные остатки, быстрая доставка и удобное оформление заказа.
           </p>
           <form className="hero-search" onSubmit={onSearch}>
             <input type="search" placeholder="Поиск по названию или артикулу" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Поиск по каталогу"/>
@@ -75,7 +76,13 @@ export function HomePage() {
       <section className="section-block">
         <h2 className="section-block__title">Популярные товары</h2>
         <div className="card-grid">
-          {popular?.items.map((p) => (<article key={p.id} className="card">
+          {popular?.items.map((p) => (<article key={p.id} className="card card--clickable" role="link" tabIndex={0} onClick={() => navigate(`/product/${p.slug}`)} onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    navigate(`/product/${p.slug}`);
+                }
+            }}>
+              <img className="card__image" src={getProductImageUrl(p)} alt={p.name} loading="lazy"/>
               <span className="pill">{p.category?.name}</span>
               <h3 className="card__h3">
                 <Link to={`/product/${p.slug}`}>{p.name}</Link>
@@ -93,7 +100,13 @@ export function HomePage() {
       <section className="section-block">
         <h2 className="section-block__title">Новинки</h2>
         <div className="card-grid">
-          {novelties?.items.map((p) => (<article key={p.id} className="card">
+          {novelties?.items.map((p) => (<article key={p.id} className="card card--clickable" role="link" tabIndex={0} onClick={() => navigate(`/product/${p.slug}`)} onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    navigate(`/product/${p.slug}`);
+                }
+            }}>
+              <img className="card__image" src={getProductImageUrl(p)} alt={p.name} loading="lazy"/>
               <span className="pill">новинка</span>
               <h3 className="card__h3">
                 <Link to={`/product/${p.slug}`}>{p.name}</Link>
@@ -118,7 +131,7 @@ export function HomePage() {
           </div>
           <div className="card card--flat">
             <h3>Безопасная оплата</h3>
-            <p>Интеграция с ЮKassa (демо в проекте), фискализация в продакшене.</p>
+            <p>Оплата онлайн и при получении, прозрачные условия и поддержка.</p>
           </div>
         </div>
       </section>
