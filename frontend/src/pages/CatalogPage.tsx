@@ -1,6 +1,8 @@
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useGetCategoriesQuery, useGetProductsQuery } from "../store/api";
+import { getProductImageUrl } from "../productImage";
 export function CatalogPage() {
+    const navigate = useNavigate();
     const [params, setParams] = useSearchParams();
     const category = params.get("category") || undefined;
     const search = params.get("q") || undefined;
@@ -142,7 +144,13 @@ export function CatalogPage() {
       {isError && <div className="alert">Не удалось загрузить каталог</div>}
 
       <div className="card-grid">
-        {data?.items.map((p) => (<article key={p.id} className="card">
+        {data?.items.map((p) => (<article key={p.id} className="card card--clickable" role="link" tabIndex={0} onClick={() => navigate(`/product/${p.slug}`)} onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    navigate(`/product/${p.slug}`);
+                }
+            }}>
+            <img className="card__image" src={getProductImageUrl(p)} alt={p.name} loading="lazy"/>
             <span className="pill">{p.category?.name ?? "—"}</span>
             <h2>
               <Link to={`/product/${p.slug}`}>{p.name}</Link>
