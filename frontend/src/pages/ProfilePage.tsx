@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { useGetProfileQuery, usePatchProfileMutation, useCreateSavedAddressMutation, useDeleteSavedAddressMutation, getErrorMessage, } from "../store/api";
 import { useAppSelector } from "../hooks";
+import { useToast } from "../components/Toast";
 export function ProfilePage() {
     const token = useAppSelector((s) => s.auth.token);
     const { data, isLoading, refetch } = useGetProfileQuery(undefined, {
@@ -10,9 +11,9 @@ export function ProfilePage() {
     const [patchProfile, { isLoading: saving }] = usePatchProfileMutation();
     const [createAddr, { isLoading: adding }] = useCreateSavedAddressMutation();
     const [delAddr] = useDeleteSavedAddressMutation();
+    const toast = useToast();
     const [name, setName] = useState("");
     const [phone, setPhone] = useState("");
-    const [msg, setMsg] = useState<string | null>(null);
     const [alabel, setAlabel] = useState("Дом");
     const [aaddr, setAaddr] = useState("");
     useEffect(() => {
@@ -27,22 +28,20 @@ export function ProfilePage() {
         return <p>Загрузка…</p>;
     async function saveProfile(e: React.FormEvent) {
         e.preventDefault();
-        setMsg(null);
         try {
             await patchProfile({
                 name: name.trim() || undefined,
                 phone: phone.trim() || "",
             }).unwrap();
-            setMsg("Профиль сохранён.");
+            toast("Профиль сохранён.");
             void refetch();
         }
         catch (err) {
-            setMsg(getErrorMessage(err as never));
+            toast(getErrorMessage(err as never), false);
         }
     }
     async function addAddress(e: React.FormEvent) {
         e.preventDefault();
-        setMsg(null);
         try {
             await createAddr({
                 label: alabel.trim(),
@@ -50,11 +49,11 @@ export function ProfilePage() {
                 isDefault: (data?.savedAddresses.length ?? 0) === 0,
             }).unwrap();
             setAaddr("");
-            setMsg("Адрес добавлен.");
+            toast("Адрес добавлен.");
             void refetch();
         }
         catch (err) {
-            setMsg(getErrorMessage(err as never));
+            toast(getErrorMessage(err as never), false);
         }
     }
     return (<div style={{ maxWidth: "560px" }}>
@@ -62,9 +61,6 @@ export function ProfilePage() {
       <p style={{ color: "var(--muted)" }}>
         Данные профиля и сохранённые адреса для оформления заказов.
       </p>
-      {msg && (<p style={{ color: msg.includes("Ошиб") ? "var(--danger)" : "var(--accent)" }}>
-          {msg}
-        </p>)}
 
       <form onSubmit={saveProfile} className="stack" style={{ marginBottom: "2rem" }}>
         <h2 style={{ fontSize: "1.1rem" }}>Профиль</h2>
