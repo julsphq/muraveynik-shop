@@ -9,6 +9,14 @@ const statusRu: Record<string, string> = {
     DELIVERED: "Доставлен",
     CANCELLED: "Отменён",
 };
+const statusClass: Record<string, string> = {
+    NEW: "status status--new",
+    PAID: "status status--paid",
+    PROCESSING: "status status--processing",
+    SHIPPED: "status status--shipped",
+    DELIVERED: "status status--delivered",
+    CANCELLED: "status status--cancelled",
+};
 export function OrdersPage() {
     const token = useAppSelector((s) => s.auth.token);
     const { data, isLoading } = useGetOrdersQuery(undefined, { skip: !token });
@@ -32,7 +40,11 @@ export function OrdersPage() {
           <tbody>
             {orders.map((o) => (<tr key={o.id}>
                 <td>{new Date(o.createdAt).toLocaleString("ru-RU")}</td>
-                <td>{statusRu[o.status] ?? o.status}</td>
+                <td>
+                  <span className={statusClass[o.status] ?? "pill"}>
+                    {statusRu[o.status] ?? o.status}
+                  </span>
+                </td>
                 <td>{Number(o.total).toLocaleString("ru-RU")} ₽</td>
                 <td>
                   {o.deliveryType === "COURIER" ? "курьер" : "самовывоз"} ·{" "}

@@ -1,7 +1,7 @@
-import { useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
-import { useGetOrderQuery, useDemoPayMutation, useRepeatOrderToCartMutation, getErrorMessage, } from "../store/api";
+import { useGetOrderQuery, useCreateYookassaPaymentMutation, useRepeatOrderToCartMutation, getErrorMessage, } from "../store/api";
 import { useAppSelector } from "../hooks";
+import { useToast } from "../components/Toast";
 const statusRu: Record<string, string> = {
     NEW: "Новый",
     PAID: "Оплачен",
@@ -9,6 +9,14 @@ const statusRu: Record<string, string> = {
     SHIPPED: "Передан в доставку",
     DELIVERED: "Доставлен",
     CANCELLED: "Отменён",
+};
+const statusClass: Record<string, string> = {
+    NEW: "status status--new",
+    PAID: "status status--paid",
+    PROCESSING: "status status--processing",
+    SHIPPED: "status status--shipped",
+    DELIVERED: "status status--delivered",
+    CANCELLED: "status status--cancelled",
 };
 export function OrderPage() {
     const { id } = useParams<{
@@ -19,10 +27,9 @@ export function OrderPage() {
     const { data, isLoading, error } = useGetOrderQuery(id!, {
         skip: !token || !id,
     });
-    const [pay, { isLoading: paying }] = useDemoPayMutation();
+    const [pay, { isLoading: paying }] = useCreateYookassaPaymentMutation();
     const [repeatToCart, { isLoading: repeating }] = useRepeatOrderToCartMutation();
-    const [msg, setMsg] = useState<string | null>(null);
-    const [repeatMsg, setRepeatMsg] = useState<string | null>(null);
+    const toast = useToast();
     if (!token)
         return <Navigate to="/login" replace/>;
     if (!id)
@@ -32,18 +39,19 @@ export function OrderPage() {
     if (error || !data)
         return <div className="alert">Заказ не найден</div>;
     async function handlePay() {
-        if (!data)
-            return;
-        setMsg(null);
+        if (!data) return;
         try {
             const r = await pay({
                 orderId: data.id,
                 guestEmail: data.guestEmail ?? undefined,
             }).unwrap();
-            setMsg(r.message);
-        }
-        catch (e) {
-            setMsg(getErrorMessage(e as never));
+            if (r.confirmationUrl) {
+                window.location.href = r.confirmationUrl;
+                return;
+            }
+            toast(r.message ?? "Демо-оплата прошла успешно");
+        } catch (e) {
+            toast(getErrorMessage(e as never), false);
         }
     }
     return (<div style={{ maxWidth: "640px" }}>
@@ -51,9 +59,13 @@ export function OrderPage() {
         <Link to="/orders">← Все заказы</Link>
       </p>
       <h1>Заказ</h1>
-      <p>
-        <span className="pill">{statusRu[data.status] ?? data.status}</span> ·{" "}
-        {new Date(data.createdAt).toLocaleString("ru-RU")}
+      <p style={{ display: "flex", alignItems: "center", gap: "0.65rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
+        <span className={statusClass[data.status] ?? "pill"}>
+          {statusRu[data.status] ?? data.status}
+        </span>
+        <span style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
+          {new Date(data.createdAt).toLocaleString("ru-RU")}
+        </span>
       </p>
       <p>
         <strong>Товары:</strong>{" "}
@@ -69,7 +81,7 @@ export function OrderPage() {
       <p>
         <strong>Оплата:</strong>{" "}
         {data.paymentMethod === "ONLINE"
-            ? "онлайн (ЮKassa)"
+            ? "онлайн (карта/СБП)"
             : "при получении"}
       </p>
       <p>
@@ -102,32 +114,27 @@ export function OrderPage() {
         <button type="button" className="btn btn--ghost" disabled={repeating} onClick={async () => {
             if (!data)
                 return;
-            setRepeatMsg(null);
             try {
                 const r = await repeatToCart(data.id).unwrap();
-                setRepeatMsg(r.message);
+                toast(r.message);
                 navigate("/cart");
             }
             catch (e) {
-                setRepeatMsg(getErrorMessage(e as never));
+                toast(getErrorMessage(e as never), false);
             }
         }}>
           {repeating ? "Добавление…" : "Повторить заказ (в корзину)"}
         </button>
-        {repeatMsg && (<p style={{ marginTop: "0.5rem", color: "var(--muted)" }}>
-            {repeatMsg}
-          </p>)}
       </div>
 
       {data.status === "NEW" && data.paymentMethod === "ONLINE" && (<div style={{ marginTop: "1.5rem" }}>
           <button type="button" className="btn btn--primary" disabled={paying} onClick={handlePay}>
-            {paying ? "Оплата…" : "Демо-оплата ЮKassa"}
+            {paying ? "Оплата…" : "Оплатить онлайн"}
           </button>
           <p style={{ fontSize: "0.85rem", color: "var(--muted)", marginTop: "0.5rem" }}>
-            Имитация успешной оплаты (без реального списания).
+            Вы будете перенаправлены на страницу оплаты ЮКассы.
           </p>
         </div>)}
 
-      {msg && (<p style={{ marginTop: "1rem", color: "var(--accent)" }}>{msg}</p>)}
     </div>);
 }
