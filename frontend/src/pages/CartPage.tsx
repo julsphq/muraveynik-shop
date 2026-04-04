@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useGetCartQuery, useUpdateCartItemMutation, useRemoveCartItemMutation, useCreateOrderMutation, useGetProfileQuery, useLazyGetProductsByIdsQuery, getErrorMessage, } from "../store/api";
 import { useAppSelector } from "../hooks";
 import { loadGuestCart, setGuestLineQty } from "../guestCart";
+import { useToast } from "../components/Toast";
+
+type OrderDone = { id: string; total: string; paymentMethod: string; demoMsg?: string };
 export function CartPage() {
     const token = useAppSelector((s) => s.auth.token);
     const { data, isLoading } = useGetCartQuery(undefined, { skip: !token });
@@ -17,7 +20,9 @@ export function CartPage() {
     const [paymentMethod, setPaymentMethod] = useState<"ONLINE" | "CASH_ON_DELIVERY">("ONLINE");
     const [deliveryZone, setDeliveryZone] = useState<"DEFAULT" | "CENTER" | "OUTSKIRTS">("DEFAULT");
     const [isReservation, setIsReservation] = useState(false);
-    const [msg, setMsg] = useState<string | null>(null);
+    const toast = useToast();
+    const navigate = useNavigate();
+    const [orderDone, setOrderDone] = useState<OrderDone | null>(null);
     const [guestTick, setGuestTick] = useState(0);
     const guestLines = useMemo(() => loadGuestCart(), [guestTick]);
     const guestIdsKey = useMemo(() => guestLines
@@ -80,7 +85,7 @@ export function CartPage() {
                         {Number(row.product.price).toLocaleString("ru-RU")} ₽
                       </td>
                       <td>
-                        <input type="number" min={1} max={row.product.stock} value={row.quantity} style={{ width: "4rem" }} onChange={(e) => {
+                        <input type="number" className="input--qty" min={1} max={row.product.stock} value={row.quantity} onChange={(e) => {
                             const q = Number(e.target.value);
                             if (q >= 1) {
                                 setGuestLineQty(row.product.id, q);
@@ -117,22 +122,22 @@ export function CartPage() {
     }
     async function submitOrder(e: React.FormEvent) {
         e.preventDefault();
-        setMsg(null);
+        const chosenPayment = isReservation ? "CASH_ON_DELIVERY" : paymentMethod;
         try {
-            await createOrder({
+            const order = await createOrder({
                 address,
                 comment: comment || undefined,
                 deliveryType,
-                paymentMethod: isReservation ? "CASH_ON_DELIVERY" : paymentMethod,
+                paymentMethod: chosenPayment,
                 deliveryZone,
                 isReservation: isReservation || undefined,
             }).unwrap();
             setAddress("");
             setComment("");
-            setMsg("Заказ создан. Оплатите его в разделе «Заказы» или при получении (если выбран наличный расчёт).");
+            setOrderDone({ id: order.id, total: order.total, paymentMethod: chosenPayment });
         }
         catch (e) {
-            setMsg(getErrorMessage(e as never));
+            toast(getErrorMessage(e as never), false);
         }
     }
     if (isLoading)
@@ -166,7 +171,7 @@ export function CartPage() {
                       {Number(row.product.price).toLocaleString("ru-RU")} ₽
                     </td>
                     <td>
-                      <input type="number" min={1} max={row.product.stock} value={row.quantity} style={{ width: "4rem" }} onChange={async (e) => {
+                      <input type="number" className="input--qty" min={1} max={row.product.stock} value={row.quantity} onChange={async (e) => {
                         const q = Number(e.target.value);
                         if (q >= 1) {
                             try {
@@ -200,11 +205,6 @@ export function CartPage() {
           <h2 style={{ marginTop: "2rem", fontSize: "1.15rem" }}>
             Оформление заказа
           </h2>
-          {msg && (<p style={{
-                    color: msg.startsWith("Заказ") ? "var(--accent)" : "var(--danger)",
-                }}>
-              {msg}
-            </p>)}
           <form onSubmit={submitOrder} style={{ maxWidth: "520px" }}>
             <div className="field">
               <label>Способ получения</label>
@@ -224,7 +224,7 @@ export function CartPage() {
             <div className="field">
               <label>Оплата</label>
               <select value={isReservation ? "CASH_ON_DELIVERY" : paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as "ONLINE" | "CASH_ON_DELIVERY")} disabled={isReservation}>
-                <option value="ONLINE">Онлайн (карта, СБП — демо ЮKassa)</option>
+                <option value="ONLINE">Онлайн (карта, СБП)</option>
                 <option value="CASH_ON_DELIVERY">При получении (наличные)</option>
               </select>
             </div>
@@ -272,5 +272,34 @@ export function CartPage() {
             </button>
           </form>
         </>)}
+
+      {orderDone && (
+        <div className="modal-overlay" onClick={() => setOrderDone(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2 className="modal__title">Заказ оформлен</h2>
+            <p style={{ color: "var(--muted)", fontSize: "0.9rem", margin: "0 0 0.5rem" }}>
+              Номер заказа: <strong style={{ color: "var(--text)" }}>#{orderDone.id.slice(0, 8).toUpperCase()}</strong>
+            </p>
+            <p style={{ margin: "0 0 0.5rem" }}>
+              Итого: <strong>{Number(orderDone.total).toLocaleString("ru-RU")} ₽</strong>
+            </p>
+            {orderDone.demoMsg ? (
+              <p style={{ color: "var(--accent-dim)", fontSize: "0.9rem", margin: 0 }}>{orderDone.demoMsg}</p>
+            ) : orderDone.paymentMethod === "ONLINE" ? (
+              <p style={{ color: "var(--muted)", fontSize: "0.9rem", margin: 0 }}>Перейдите в список заказов, чтобы оплатить онлайн.</p>
+            ) : (
+              <p style={{ color: "var(--muted)", fontSize: "0.9rem", margin: 0 }}>Оплата при получении. Ждём вас!</p>
+            )}
+            <div className="modal__actions">
+              <button type="button" className="btn btn--primary" onClick={() => { setOrderDone(null); navigate("/orders"); }}>
+                Перейти к заказам
+              </button>
+              <button type="button" className="btn btn--ghost" onClick={() => { setOrderDone(null); navigate("/catalog"); }}>
+                Продолжить покупки
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>);
 }

@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { Link, Navigate } from "react-router-dom";
-import { useCreateGuestOrderMutation, useDemoPayMutation, getErrorMessage, type Order, } from "../store/api";
+import { useCreateGuestOrderMutation, useCreateYookassaPaymentMutation, getErrorMessage, type Order, } from "../store/api";
 import { loadGuestCart, clearGuestCart } from "../guestCart";
+import { useToast } from "../components/Toast";
 export function GuestCheckoutPage() {
     const lines = loadGuestCart();
     const [createOrder, { isLoading }] = useCreateGuestOrderMutation();
-    const [pay, { isLoading: paying }] = useDemoPayMutation();
+    const [createPayment, { isLoading: paying }] = useCreateYookassaPaymentMutation();
     const [done, setDone] = useState<Order | null>(null);
     const [guestEmail, setGuestEmail] = useState("");
     const [guestPhone, setGuestPhone] = useState("");
@@ -16,14 +17,12 @@ export function GuestCheckoutPage() {
     const [paymentMethod, setPaymentMethod] = useState<"ONLINE" | "CASH_ON_DELIVERY">("ONLINE");
     const [deliveryZone, setDeliveryZone] = useState<"DEFAULT" | "CENTER" | "OUTSKIRTS">("DEFAULT");
     const [isReservation, setIsReservation] = useState(false);
-    const [err, setErr] = useState<string | null>(null);
-    const [payMsg, setPayMsg] = useState<string | null>(null);
+    const toast = useToast();
     if (lines.length === 0 && !done) {
         return <Navigate to="/cart" replace/>;
     }
     async function onSubmit(e: React.FormEvent) {
         e.preventDefault();
-        setErr(null);
         try {
             const order = await createOrder({
                 items: lines.map((l) => ({
@@ -44,22 +43,23 @@ export function GuestCheckoutPage() {
             setDone(order);
         }
         catch (e) {
-            setErr(getErrorMessage(e as never));
+            toast(getErrorMessage(e as never), false);
         }
     }
     async function onPay() {
-        if (!done)
-            return;
-        setPayMsg(null);
+        if (!done) return;
         try {
-            const r = await pay({
+            const r = await createPayment({
                 orderId: done.id,
                 guestEmail: done.guestEmail ?? guestEmail,
             }).unwrap();
-            setPayMsg(r.message);
-        }
-        catch (e) {
-            setPayMsg(getErrorMessage(e as never));
+            if (r.confirmationUrl) {
+                window.location.href = r.confirmationUrl;
+                return;
+            }
+            toast(r.message ?? "Демо-оплата прошла успешно");
+        } catch (e) {
+            toast(getErrorMessage(e as never), false);
         }
     }
     if (done) {
@@ -81,11 +81,8 @@ export function GuestCheckoutPage() {
         </p>
         {done.paymentMethod === "ONLINE" && (<div style={{ marginTop: "1.5rem" }}>
             <button type="button" className="btn btn--primary" disabled={paying} onClick={onPay}>
-              {paying ? "Оплата…" : "Демо-оплата ЮKassa"}
+              {paying ? "Оплата…" : "Оплатить онлайн"}
             </button>
-            {payMsg && (<p style={{ marginTop: "0.75rem", color: "var(--accent)" }}>
-                {payMsg}
-              </p>)}
           </div>)}
         <p style={{ marginTop: "1.5rem" }}>
           <Link to="/catalog">В каталог</Link>
@@ -98,7 +95,6 @@ export function GuestCheckoutPage() {
         ИП «Муравейник» — доставка по городу, оплата онлайн или при получении (
         ТЗ).
       </p>
-      {err && <div className="alert">{err}</div>}
       <form onSubmit={onSubmit} className="stack">
         <div className="field">
           <label htmlFor="gname">ФИО</label>
@@ -130,7 +126,7 @@ export function GuestCheckoutPage() {
         <div className="field">
           <label>Оплата</label>
           <select value={isReservation ? "CASH_ON_DELIVERY" : paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as "ONLINE" | "CASH_ON_DELIVERY")} disabled={isReservation}>
-            <option value="ONLINE">Банковская карта / СБП (демо ЮKassa)</option>
+            <option value="ONLINE">Банковская карта / СБП</option>
             <option value="CASH_ON_DELIVERY">Наличные при получении</option>
           </select>
         </div>
