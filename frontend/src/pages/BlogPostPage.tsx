@@ -23,15 +23,17 @@ export function BlogPostPage() {
         return <p>Загрузка…</p>;
     if (isError || !data)
         return <div className="alert">Статья не найдена</div>;
-    return (<article style={{ maxWidth: "640px" }}>
-      <p className="card__meta">
+    return (<article className="blog-post">
+      <p className="card__meta blog-post__back">
         <Link to="/blog">← Все статьи</Link>
       </p>
-      <h1>{data.title}</h1>
-      <p style={{ color: "var(--muted)" }}>
+      <header className="blog-post__header">
+        <h1>{data.title}</h1>
+        <p className="blog-post__date">
         {new Date(data.publishedAt).toLocaleDateString("ru-RU")}
-      </p>
-      <p style={{ fontWeight: 500 }}>{data.excerpt}</p>
-      <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{data.body}</div>
+        </p>
+      </header>
+      <p className="blog-post__excerpt">{data.excerpt}</p>
+      <div className="blog-post__body">{data.body}</div>
     </article>);
 }
