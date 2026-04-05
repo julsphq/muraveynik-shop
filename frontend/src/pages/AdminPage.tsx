@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link, Navigate } from "react-router-dom";
-import { useGetAdminStatsQuery, useGetAdminOrdersQuery, usePatchAdminOrderStatusMutation, useGetAdminProductsQuery, useDeleteAdminProductMutation, useGetAdminQuestionsQuery, usePatchAdminQuestionMutation, } from "../store/api";
+import { useGetAdminStatsQuery, useGetAdminOrdersQuery, usePatchAdminOrderStatusMutation, useGetAdminProductsQuery, useDeleteAdminProductMutation, usePatchAdminProductMutation, useUploadAdminProductImageMutation, useGetAdminQuestionsQuery, usePatchAdminQuestionMutation, } from "../store/api";
 import { useAppSelector } from "../hooks";
+import { useToast } from "../components/Toast";
 const statuses = [
     "NEW",
     "PAID",
@@ -42,9 +43,18 @@ export function AdminPage() {
     });
     const [patchStatus] = usePatchAdminOrderStatusMutation();
     const [deleteProduct] = useDeleteAdminProductMutation();
+    const [patchProduct] = usePatchAdminProductMutation();
+    const [uploadProductImage] = useUploadAdminProductImageMutation();
     const [patchQuestion] = usePatchAdminQuestionMutation();
-    const [msg, setMsg] = useState<string | null>(null);
+    const toast = useToast();
+    const [exporting, setExporting] = useState(false);
     const [qaDraft, setQaDraft] = useState<Record<string, string>>({});
+    const [uploadingById, setUploadingById] = useState<Record<string, boolean>>({});
+    const [patchingOrderId, setPatchingOrderId] = useState<string | null>(null);
+    const [answeringById, setAnsweringById] = useState<Record<string, boolean>>({});
+    const [editingProductId, setEditingProductId] = useState<string | null>(null);
+    const [editProductDraft, setEditProductDraft] = useState<{ stock: string; price: string; imageUrl: string }>({ stock: "", price: "", imageUrl: "" });
+    const [savingProductId, setSavingProductId] = useState<string | null>(null);
     if (!token)
         return <Navigate to="/login" replace/>;
     if (user?.role !== "ADMIN" && user?.role !== "MANAGER") {
@@ -55,20 +65,29 @@ export function AdminPage() {
     if (!stats)
         return <div className="alert">Не удалось загрузить данные</div>;
     async function downloadExport() {
-        if (!token)
-            return;
-        const r = await fetch("/api/admin/stats/export.csv", {
-            headers: { authorization: `Bearer ${token}` },
-        });
-        if (!r.ok)
-            return;
-        const blob = await r.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "orders-export.csv";
-        a.click();
-        URL.revokeObjectURL(url);
+        if (!token) return;
+        setExporting(true);
+        try {
+            const r = await fetch("/api/admin/stats/export.csv", {
+                headers: { authorization: `Bearer ${token}` },
+            });
+            if (!r.ok) throw new Error();
+            const blob = await r.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "orders-export.csv";
+            a.style.display = "none";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            toast("Файл скачан");
+        } catch {
+            toast("Не удалось экспортировать", false);
+        } finally {
+            setExporting(false);
+        }
     }
     return (<div>
       <h1>Админ-панель</h1>
@@ -87,12 +106,10 @@ export function AdminPage() {
         <button type="button" className={tab === "qa" ? "btn btn--primary" : "btn btn--ghost"} onClick={() => setTab("qa")}>
           Вопросы
         </button>
-        {user?.role === "ADMIN" && (<button type="button" className="btn btn--ghost" onClick={downloadExport}>
-            Экспорт CSV заказов
-          </button>)}
       </div>
 
-      {tab === "orders" && (<>
+
+{tab === "orders" && (<>
       <div className="card-grid" style={{ marginTop: "1.5rem" }}>
         <div className="card">
           <span className="pill">Пользователи</span>
@@ -114,9 +131,16 @@ export function AdminPage() {
         </div>
       </div>
 
-      <h2 style={{ marginTop: "2rem", fontSize: "1.2rem" }}>Заказы</h2>
-      {msg && <p style={{ color: "var(--accent)" }}>{msg}</p>}
-      <div style={{ overflowX: "auto" }}>
+      <div style={{ marginTop: "2rem", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem" }}>
+        <h2 style={{ margin: 0, fontSize: "1.2rem" }}>Заказы</h2>
+        {user?.role === "ADMIN" && (
+          <button type="button" className="btn btn--ghost" disabled={exporting} style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", fontSize: "0.88rem" }} onClick={downloadExport}>
+            {exporting && <span className="spinner" />}
+            {exporting ? "Экспорт…" : "Скачать CSV"}
+          </button>
+        )}
+      </div>
+      <div style={{ overflowX: "auto", marginTop: "0.75rem" }}>
         <table className="table">
           <thead>
             <tr>
@@ -137,23 +161,24 @@ export function AdminPage() {
                 </td>
                 <td>{Number(o.total).toLocaleString("ru-RU")} ₽</td>
                 <td>
-                  <select value={o.status} onChange={async (e) => {
-                    setMsg(null);
-                    try {
-                        await patchStatus({
-                            id: o.id,
-                            status: e.target.value,
-                        }).unwrap();
-                        setMsg("Статус обновлён");
-                    }
-                    catch {
-                        setMsg("Не удалось обновить");
-                    }
-                }}>
-                    {statuses.map((s) => (<option key={s} value={s}>
-                        {statusRu[s]}
-                      </option>))}
-                  </select>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                    <select className="input" disabled={patchingOrderId === o.id} value={o.status} onChange={async (e) => {
+                        setPatchingOrderId(o.id);
+                        try {
+                            await patchStatus({ id: o.id, status: e.target.value }).unwrap();
+                            toast("Статус обновлён");
+                        }
+                        catch {
+                            toast("Не удалось обновить", false);
+                        }
+                        finally {
+                            setPatchingOrderId(null);
+                        }
+                    }}>
+                      {statuses.map((s) => (<option key={s} value={s}>{statusRu[s]}</option>))}
+                    </select>
+                    {patchingOrderId === o.id && <span className="spinner" />}
+                  </div>
                 </td>
               </tr>))}
           </tbody>
@@ -169,39 +194,171 @@ export function AdminPage() {
                 <th>SKU</th>
                 <th>Название</th>
                 <th>Остаток</th>
+                <th>Цена</th>
+                <th>Изображение</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {adminProducts?.items.map((p) => (<tr key={p.id}>
+              {adminProducts?.items.map((p) => (
+                <tr key={p.id}>
                   <td>{p.sku}</td>
                   <td>
                     <Link to={`/product/${p.slug}`}>{p.name}</Link>
                   </td>
-                  <td>{p.stock}</td>
                   <td>
-                    <button type="button" className="btn btn--ghost" style={{ fontSize: "0.75rem", padding: "0.2rem 0.4rem" }} onClick={async () => {
-                    if (!window.confirm(`Удалить «${p.name}»?`))
+                    {editingProductId === p.id ? (
+                      <input
+                        type="number"
+                        min={0}
+                        className="input"
+                        style={{ width: "80px", padding: "0.25rem 0.4rem", fontSize: "0.88rem" }}
+                        value={editProductDraft.stock}
+                        onChange={(e) => setEditProductDraft((d) => ({ ...d, stock: e.target.value }))}
+                      />
+                    ) : (
+                      <span style={{ fontWeight: p.stock === 0 ? 600 : undefined, color: p.stock === 0 ? "var(--danger)" : undefined }}>
+                        {p.stock}
+                      </span>
+                    )}
+                  </td>
+                  <td>
+                    {editingProductId === p.id ? (
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        className="input"
+                        style={{ width: "100px", padding: "0.25rem 0.4rem", fontSize: "0.88rem" }}
+                        value={editProductDraft.price}
+                        onChange={(e) => setEditProductDraft((d) => ({ ...d, price: e.target.value }))}
+                      />
+                    ) : (
+                      <span>{Number(p.price).toLocaleString("ru-RU")} ₽</span>
+                    )}
+                  </td>
+                  <td>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+                      {editingProductId === p.id && (
+                        <input
+                          type="url"
+                          className="input"
+                          placeholder="https://… или /uploads/…"
+                          value={editProductDraft.imageUrl}
+                          onChange={(e) => setEditProductDraft((d) => ({ ...d, imageUrl: e.target.value }))}
+                          style={{ fontSize: "0.8rem", padding: "0.25rem 0.5rem", width: "200px" }}
+                        />
+                      )}
+                      <label className="btn btn--ghost" style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem", cursor: uploadingById[p.id] ? "not-allowed" : "pointer", opacity: uploadingById[p.id] ? 0.6 : 1, display: "inline-flex", alignItems: "center", gap: "0.35rem", alignSelf: "flex-start" }}>
+                        {uploadingById[p.id] && <span className="spinner" />}
+                        {uploadingById[p.id] ? "Загрузка…" : "Загрузить файл"}
+                        <input type="file" accept="image/*" style={{ display: "none" }} disabled={Boolean(uploadingById[p.id])} onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    e.currentTarget.value = "";
+                    if (!file)
                         return;
+                    setUploadingById((s) => ({ ...s, [p.id]: true }));
                     try {
-                        await deleteProduct(p.id).unwrap();
-                        setMsg("Товар удалён");
+                        const form = new FormData();
+                        form.append("image", file);
+                        const uploaded = await uploadProductImage(form).unwrap();
+                        await patchProduct({ id: p.id, imageUrl: uploaded.imageUrl }).unwrap();
+                        if (editingProductId === p.id) {
+                            setEditProductDraft((d) => ({ ...d, imageUrl: uploaded.imageUrl }));
+                        }
+                        toast("Изображение загружено и сохранено");
                     }
                     catch {
-                        setMsg("Не удалось удалить");
+                        toast("Не удалось загрузить файл", false);
                     }
-                }}>
-                      Удалить
-                    </button>
+                    finally {
+                        setUploadingById((s) => ({ ...s, [p.id]: false }));
+                    }
+                }}/>
+                      </label>
+                    </div>
                   </td>
-                </tr>))}
+                  <td>
+                    <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
+                      {editingProductId === p.id ? (
+                        <>
+                          <button
+                            type="button"
+                            className="btn btn--primary"
+                            disabled={savingProductId === p.id}
+                            style={{ fontSize: "0.75rem", padding: "0.25rem 0.6rem", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
+                            onClick={async () => {
+                              setSavingProductId(p.id);
+                              try {
+                                await patchProduct({
+                                  id: p.id,
+                                  stock: Number(editProductDraft.stock),
+                                  price: Number(editProductDraft.price),
+                                  imageUrl: editProductDraft.imageUrl.trim() || undefined,
+                                }).unwrap();
+                                toast("Сохранено");
+                                setEditingProductId(null);
+                              } catch {
+                                toast("Не удалось сохранить", false);
+                              } finally {
+                                setSavingProductId(null);
+                              }
+                            }}
+                          >
+                            {savingProductId === p.id && <span className="spinner spinner--light" />}
+                            {savingProductId === p.id ? "Сохр…" : "Сохранить"}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn--ghost"
+                            style={{ fontSize: "0.75rem", padding: "0.25rem 0.6rem" }}
+                            onClick={() => setEditingProductId(null)}
+                          >
+                            Отмена
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            className="btn btn--ghost"
+                            style={{ fontSize: "0.75rem", padding: "0.25rem 0.6rem" }}
+                            onClick={() => {
+                              setEditingProductId(p.id);
+                              setEditProductDraft({ stock: String(p.stock), price: String(p.price), imageUrl: p.imageUrl ?? "" });
+                            }}
+                          >
+                            Ред.
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn--ghost"
+                            style={{ fontSize: "0.75rem", padding: "0.25rem 0.6rem", borderColor: "var(--danger)", color: "var(--danger)" }}
+                            onClick={async () => {
+                              if (!window.confirm(`Удалить «${p.name}»?`)) return;
+                              try {
+                                await deleteProduct(p.id).unwrap();
+                                toast("Товар удалён");
+                              } catch {
+                                toast("Не удалось удалить", false);
+                              }
+                            }}
+                          >
+                            Удалить
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
-          <p style={{ fontSize: "0.9rem", color: "var(--muted)" }}>
-            Создание и правка — через API{" "}
-            <code>POST/PATCH /api/admin/products</code>. Массовая загрузка:{" "}
-            <code>POST /api/admin/products/import-csv</code>.
-          </p>
+          {/*<p style={{ fontSize: "0.9rem", color: "var(--muted)" }}>*/}
+          {/*  Можно загрузить файл изображения или обновить `imageUrl` вручную прямо здесь. Полное создание/правка — через API{" "}*/}
+          {/*  <code>POST/PATCH /api/admin/products</code>. Массовая загрузка:{" "}*/}
+          {/*  <code>POST /api/admin/products/import-csv</code>.*/}
+          {/*</p>*/}
         </div>)}
 
       {tab === "qa" && (<div style={{ marginTop: "1.5rem" }}>
@@ -216,21 +373,25 @@ export function AdminPage() {
                   <strong>Ответ:</strong> {q.answer}
                 </p>) : (<div className="field" style={{ marginBottom: 0 }}>
                   <textarea rows={2} placeholder="Ответ покупателю" value={qaDraft[q.id] ?? ""} onChange={(e) => setQaDraft((d) => ({ ...d, [q.id]: e.target.value }))}/>
-                  <button type="button" className="btn btn--primary" style={{ marginTop: "0.5rem" }} onClick={async () => {
+                  <button type="button" className="btn btn--primary" disabled={answeringById[q.id]} style={{ marginTop: "0.5rem", display: "inline-flex", alignItems: "center", gap: "0.4rem" }} onClick={async () => {
                         const a = qaDraft[q.id]?.trim();
-                        if (!a)
-                            return;
+                        if (!a) return;
+                        setAnsweringById((s) => ({ ...s, [q.id]: true }));
                         try {
                             await patchQuestion({ id: q.id, answer: a }).unwrap();
                             setQaDraft((d) => ({ ...d, [q.id]: "" }));
                             void refetchQa();
-                            setMsg("Ответ сохранён");
+                            toast("Ответ сохранён");
                         }
                         catch {
-                            setMsg("Ошибка ответа");
+                            toast("Ошибка при отправке", false);
+                        }
+                        finally {
+                            setAnsweringById((s) => ({ ...s, [q.id]: false }));
                         }
                     }}>
-                    Отправить ответ
+                    {answeringById[q.id] && <span className="spinner spinner--light" />}
+                    {answeringById[q.id] ? "Отправка…" : "Отправить ответ"}
                   </button>
                 </div>)}
             </div>))}
