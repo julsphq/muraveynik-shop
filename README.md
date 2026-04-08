@@ -220,6 +220,4 @@ npm run dev
 - **1С:** `POST /api/integration/1c/import-stock`, `GET /api/integration/logs`.
 - **Отзывы:** `GET /api/reviews/product/:productId` (список + средняя оценка), `POST /api/reviews` (JWT, один отзыв на товар с аккаунта), `DELETE /api/reviews/:id` (свой отзыв или админ).
 
-## Что сознательно упрощено
 
-Отзывы, вопросы, калькулятор расхода по площади, SMS/e-mail уведомления, чат, блог, полноценный SDK ЮKassa и очередь RabbitMQ — в ТЗ отмечены как средний/низкий приоритет или инфраструктура; при защите опишите их как этап внедрения.
