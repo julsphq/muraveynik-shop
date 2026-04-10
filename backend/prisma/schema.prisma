@@ -1,0 +1,216 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  MANAGER
+  ADMIN
+}
+
+enum DeliveryType {
+  COURIER
+  PICKUP
+}
+
+enum PaymentMethod {
+  ONLINE
+  CASH_ON_DELIVERY
+}
+
+enum OrderStatus {
+  NEW
+  PAID
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+model User {
+  id               String            @id @default(cuid())
+  email            String            @unique
+  passwordHash     String
+  name             String?
+  phone            String?
+  role             Role              @default(CUSTOMER)
+  createdAt        DateTime          @default(now())
+  cartItems        CartItem[]
+  orders           Order[]
+  favorites        Favorite[]
+  reviews          Review[]
+  savedAddresses   SavedAddress[]
+  productQuestions ProductQuestion[]
+}
+
+model Category {
+  id          String     @id @default(cuid())
+  slug        String     @unique
+  name        String
+  description String?
+  parentId    String?
+  parent      Category?  @relation("CatTree", fields: [parentId], references: [id])
+  children    Category[] @relation("CatTree")
+  products    Product[]
+}
+
+model Product {
+  id               String            @id @default(cuid())
+  slug             String            @unique
+  sku              String            @unique
+  name             String
+  description      String
+  price            Decimal           @db.Decimal(12, 2)
+  stock            Int               @default(0)
+  imageUrl         String?
+  brand            String?
+  material         String?
+  sizeLabel        String?
+  weightKg         Decimal?          @db.Decimal(8, 3)
+  popularity       Int               @default(0)
+  isNew            Boolean           @default(false)
+  countryOrigin    String?
+  applicationGuide String?
+  categoryId       String
+  category         Category          @relation(fields: [categoryId], references: [id])
+  cartItems        CartItem[]
+  orderItems       OrderItem[]
+  favorites        Favorite[]
+  reviews          Review[]
+  questions        ProductQuestion[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+}
+
+model ProductQuestion {
+  id         String    @id @default(cuid())
+  productId  String
+  product    Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  text       String
+  answer     String?
+  createdAt  DateTime  @default(now())
+  answeredAt DateTime?
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating    Int
+  text      String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, productId])
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+}
+
+model SavedAddress {
+  id        String  @id @default(cuid())
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label     String
+  address   String
+  isDefault Boolean @default(false)
+}
+
+model CartItem {
+  id        String  @id @default(cuid())
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity  Int     @default(1)
+
+  @@unique([userId, productId])
+}
+
+model Order {
+  id              String         @id @default(cuid())
+  userId          String?
+  user            User?          @relation(fields: [userId], references: [id])
+  guestEmail      String?
+  guestPhone      String?
+  guestName       String?
+  status          OrderStatus    @default(NEW)
+  itemsSubtotal   Decimal        @db.Decimal(12, 2)
+  deliveryCost    Decimal        @db.Decimal(12, 2)
+  total           Decimal        @db.Decimal(12, 2)
+  deliveryType    DeliveryType
+  paymentMethod   PaymentMethod  @default(ONLINE)
+  address         String?
+  comment         String?
+  isReservation   Boolean        @default(false)
+  deliveryZone    String?
+  createdAt       DateTime       @default(now())
+  items           OrderItem[]
+  payments        Payment[]
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  quantity  Int
+  price     Decimal @db.Decimal(12, 2)
+}
+
+model Payment {
+  id         String   @id @default(cuid())
+  orderId    String
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  provider   String
+  externalId String?
+  amount     Decimal  @db.Decimal(12, 2)
+  status     String
+  createdAt  DateTime @default(now())
+}
+
+model Banner {
+  id        String  @id @default(cuid())
+  title     String
+  subtitle  String?
+  imageUrl  String?
+  linkHref  String?
+  sortOrder Int     @default(0)
+  active    Boolean @default(true)
+}
+
+model BlogPost {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  excerpt     String
+  body        String
+  publishedAt DateTime @default(now())
+}
+
+model IntegrationLog {
+  id        String   @id @default(cuid())
+  source    String
+  direction String
+  payload   Json?
+  status    String
+  createdAt DateTime @default(now())
+}

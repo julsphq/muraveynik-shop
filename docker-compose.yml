@@ -1,0 +1,29 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mur
+      POSTGRES_PASSWORD: mur
+      POSTGRES_DB: muraveynik
+    # 5433 снаружи — чтобы не пересекаться с локальным PostgreSQL на 5432
+    ports:
+      - "5433:5432"
+    volumes:
+      - mur_pg:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+volumes:
+  mur_pg:
